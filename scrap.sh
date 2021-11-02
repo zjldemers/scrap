@@ -8,6 +8,7 @@
 # - Allow for option concatenation (e.g. -r [f1] -s[f2]...)
 # --- also consider something like -abc (if there's a combination that would be reasonable)
 # - Handle duplicates better (search for files via .trashinfo Path data rather than their stored filenames)
+# - Add --version option
 
 
 
@@ -15,16 +16,36 @@
 # Operations
 i=0 # used to increment op codes below
 cOP_SCRAP=$((i=i+1))   # scrap a file (place it in the trash with metadata)
-cOP_RESTORE=$((i=i+1)) # restore a specfied file to its original location
+cOP_RESTORE=$((i=i+1)) # restore a specified file to its original location
 cOP_SHRED=$((i=i+1))   # permanently and securely delete a scrapped file
 cOP_META=$((i=i+1))    # view metadata associated with a given file
 cOP_ERROR=$((i=i+1))   # display error messages
 
-# Paths
+# Paths and other constant strings
 cTRASHLOC="$HOME/.local/share/Trash" # overall trash location
 cFILELOC="$cTRASHLOC/files/"         # location of scrapped files
 cINFOLOC="$cTRASHLOC/info/"          # location of scrapped file metadata files
 cINFOEXT=".trashinfo"                # file extension for metadata files
+cHELPSTR="USAGE: scrap
+  or:  scrap FILE
+  or:  scrap OPTION
+  or:  scrap OPTION FILE
+Interact with your trash bin by discarding, restoring, or shredding various
+  files in such a way that a GUI-based trash manager will also be able to
+  operate without any conflicts.
+\nMandatory arguments to long options are mandatory for short options too.
+  -d, --directory  Print the directory where trash files are stored.
+  -f, --files      List contents of Trash/files directory (scrapped files).
+  -i, --info       List contents of Trash/info directory (metadata associated
+                       with scrapped files).
+  -m, --meta       View metadata associated with a given file.
+  -r, --restore    Restore a specified file to its original location.
+  -s, --shred      After confirmation, shred the specified scrapped file, 
+                       permanently and securely removing it from the system.
+  --help           Display this help and exit.
+\nWritten by Zachary J. L. Demers
+View the source at https://github.com/zdemers/scrap.git\n"
+
 
 ### VARIABLES
 op=$cOP_SCRAP      # operation selected to perform
@@ -68,7 +89,7 @@ elif [ $# -gt 2 ]; then
     op=$cOP_ERROR
 fi
 
-# TODO: add more operations dependent upon arguments given
+# Parse through input arguments
 for arg in "$@"; do
     if [ $op == $cOP_ERROR ]; then
         break # ran into an error, break out of loop and report below
@@ -85,6 +106,11 @@ for arg in "$@"; do
         exit # no need to process anything further, quit the script
         ;;
     
+    "--help") # display the help menu and quit
+        printf "$cHELPSTR"
+        exit
+        ;;
+
     "-i" | "--info") # list contents of Trash/info directory
         ls --color=auto -A $cINFOLOC
         exit # no need to process anything further, quit the script
@@ -94,7 +120,7 @@ for arg in "$@"; do
         op=$cOP_META
         ;;
 
-    "-r" | "--restore") # restore a specfied file to its original location
+    "-r" | "--restore") # restore a specified file to its original location
         op=$cOP_RESTORE
         ;;
     
