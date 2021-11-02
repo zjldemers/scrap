@@ -7,7 +7,8 @@
 ### CONSTANTS
 # Operations
 cOP_SCRAP=0     # scrap a file (place it in the trash with metadata)
-cOP_RESTORE=1   # restore a specfied file to it's original location
+cOP_RESTORE=1   # restore a specfied file to its original location
+cOP_SHRED=2     # permanently and securely delete a scrapped file
 cOP_ERROR=99    # display error messages
 
 # Paths
@@ -60,8 +61,12 @@ for arg in "$@"; do
 
     # TODO: add more cases for other input args (flags, etc.)
 
-    "-r" | "--restore") # restore a file to its original location
+    "-r" | "--restore") # restore a specfied file to its original location
         op=$cOP_RESTORE
+        ;;
+    
+    "-s" | "--shred") # permanently and securely delete a scrapped file
+        op=$cOP_SHRED
         ;;
 
     *) # argument is not a flag/option; likely a filename
@@ -79,7 +84,7 @@ for arg in "$@"; do
                 ErrMsg "no file '$filename' exists at '$filepath'"
                 op=$cOP_ERROR
             fi
-        elif [ $op == $cOP_RESTORE ]; then
+        elif [[ ($op == $cOP_RESTORE) || ($op == $cOP_SHRED) ]]; then
             if ! [ -e "$cFILELOC$filename" ]; then # file name not in .../Trash/files
                 ErrMsg "'$filename' does not exist in the scrap"
                 op=$cOP_ERROR
@@ -107,6 +112,10 @@ if [ $op == $cOP_ERROR ]; then
 fi
 
 case $op in
+    $cOP_RESTORE) # restore a file from the scrap to its original location
+        printf "Restored $(RestoreFile "$filename")\n"
+        ;;
+
     $cOP_SCRAP) # scrap a file, placing it in the trash along with relevant metadata
         infofile="$cINFOLOC$filename$cINFOEXT" # file to store metadata in
         filenum=0                              # helps with duplicate names in trash directory
@@ -125,7 +134,30 @@ case $op in
         printf "Successfully scrapped the file $filename\n" # report results to the user
         ;;
     
-    $cOP_RESTORE) # restore a file from the scrap to its original location
-        printf "Restored $(RestoreFile "$filename")\n"
+    $cOP_SHRED) # permanently and securely delete a scrapped file
+        printf "Confirm: permanently erase '$filename'?\n(THIS CANNOT BE UNDONE) (y/n) "
+        read check
+        while [[ ("$check" != "y") && ("$check" != "n") ]]; do
+            printf "Please enter either 'y' or 'n': "
+            read check
+        done
+        if [ "$check" == "y" ]; then # user confirmed operation
+            if [ -d $cFILELOC$filename ]; then 
+                # filename is actually a directory
+                # shred all files in the directory first
+                find "$cFILELOC$filename" -type f -exec shred -f --remove=wipe {} +
+                # remove all directories (which are now empty)
+                rm -r "$cFILELOC$filename" # shred does not handle directories well
+            else
+                # remove the specified file
+                shred -f --remove=wipe "$cFILELOC$filename"
+            fi
+            shred --remove=wipe "$cINFOLOC$filename$cINFOEXT" # shred the metadata info file
+            printf "$filename has successfully been shredded\n"
+        else
+            # user discontinued operation
+            printf "Cancled shredding of $filename\n"
+            exit # no need to process anything further, quit the script
+        fi
         ;;
 esac
