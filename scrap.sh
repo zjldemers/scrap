@@ -1,15 +1,25 @@
 #!/bin/bash
 # Licensed under the terms of the GPL v3. See LICENSE.
 
-# Starting with just placing an item in the trash with appropriate metadata
-# Will want more operations later though, thus the op variable usage
+# Broader TODO list (in no particular order):
+# - Empty the entire trash bin
+# - List contents of Trash/files
+# - List contents of Trash/info
+# - List contents of Trash/files as a tree, with options
+# - Display the metadata associated with a given file
+# - Display a help menu
+# - Allow for option concatenation (e.g. -r [f1] -s[f2]...)
+# --- also consider something like -abc (if there's a combination that would be reasonable)
+
+
 
 ### CONSTANTS
 # Operations
-cOP_SCRAP=0     # scrap a file (place it in the trash with metadata)
-cOP_RESTORE=1   # restore a specfied file to its original location
-cOP_SHRED=2     # permanently and securely delete a scrapped file
-cOP_ERROR=99    # display error messages
+i=0 # used to increment op codes below
+cOP_SCRAP=$((i=i+1))   # scrap a file (place it in the trash with metadata)
+cOP_RESTORE=$((i=i+1)) # restore a specfied file to its original location
+cOP_SHRED=$((i=i+1))   # permanently and securely delete a scrapped file
+cOP_ERROR=$((i=i+1))   # display error messages
 
 # Paths
 cTRASHLOC="$HOME/.local/share/Trash" # overall trash location
@@ -18,9 +28,9 @@ cINFOLOC="$cTRASHLOC/info/"          # location of scrapped file metadata files
 cINFOEXT=".trashinfo"                # file extension for metadata files
 
 ### VARIABLES
-op=$cOP_SCRAP   # operation selected to perform
-filename=""     # name of file to be operated on
-err="scrap:"    # error message to be appended as it goes
+op=$cOP_SCRAP      # operation selected to perform
+filename=""        # name of file to be operated on
+err="scrap error:" # error message to be appended as it goes
 
 ### FUNCTIONS
 function ErrMsg() {
@@ -53,13 +63,23 @@ if [ $# == 0 ]; then
     # no arguments given: display info about what's in the scrap (trash)
     printf "$(GetScrapInfo)"
     exit # no need to process anything further, quit the script
+elif [ $# -gt 2 ]; then
+    # should never have more than two arguments, based on the current design
+    ErrMsg "Too many arguments"
+    op=$cOP_ERROR
 fi
 
 # TODO: add more operations dependent upon arguments given
 for arg in "$@"; do
+    if [ $op == $cOP_ERROR ]; then
+        break # ran into an error, break out of loop and report below
+    fi
     case $arg in
 
-    # TODO: add more cases for other input args (flags, etc.)
+    "-d" | "--directory") # print the path to the Trash/files location
+        printf "$cFILELOC\n"
+        exit # no need to process anything further, quit the script
+        ;;
 
     "-r" | "--restore") # restore a specfied file to its original location
         op=$cOP_RESTORE
@@ -100,8 +120,8 @@ for arg in "$@"; do
     esac
 done
 
-if [ -z $filename ]; then # filename is an empty string
-    # if we made it this far, we should have a file specified
+if [[ ($# -lt 3) && (-z $filename) ]]; then # filename is an empty string
+    # if we made it this far with no more than 2 arguments, we should have a valid file specified
     ErrMsg "missing file operand"
     op=$cOP_ERROR
 fi
