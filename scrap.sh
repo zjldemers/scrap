@@ -1,5 +1,5 @@
 #!/bin/bash
-
+# Licensed under the terms of the GPL v3. See LICENSE.
 
 # Starting with just placing an item in the trash with appropriate metadata
 # Will want more operations later though, thus the op variable usage
@@ -7,6 +7,7 @@
 ### CONSTANTS
 # Operations
 cOP_SCRAP=0     # scrap a file (place it in the trash with metadata)
+cOP_RESTORE=1   # restore a specfied file to it's original location
 cOP_ERROR=99    # display error messages
 
 # Paths
@@ -21,6 +22,9 @@ filename=""     # name of file to be operated on
 err="scrap:"    # error message to be appended as it goes
 
 ### FUNCTIONS
+function ErrMsg() {
+    err+="\n  $1"
+}
 function GetDate() {
     # return the current date/time in the appropriate format for the .trashinfo file
     echo "$(date '+%Y-%m-%dT%H:%M:%S')"
@@ -33,6 +37,14 @@ function GetScrapInfo() {
     ret+="   Total storage used:             ${total%%[[:space:]]*}B\n"
     echo "$ret"
 }
+function RestoreFile() {
+    origpath=$(awk -F 'Path=' '{print $2}' "$cINFOLOC$1$cINFOEXT") # Find the item's original path to restore it to
+    origpath="${origpath//$'\n'}"                                  # Remove erroneous trailing newlines from previous step
+    mkdir -p "${origpath%/*}/"                                     # Remake any parent directories, if needed (%/* removes the filename from the path)
+    mv $cFILELOC$1 $origpath                                       # Move the file back to where it came from originally
+    shred --remove=wipe "$cINFOLOC$filename$cINFOEXT"              # Remove the info file permanently
+    echo $origpath                                                 # Return the restored file's new (original) path
+}
 
 
 ### MAIN SCRIPT
@@ -44,9 +56,13 @@ fi
 
 # TODO: add more operations dependent upon arguments given
 for arg in "$@"; do
-    case arg in
+    case $arg in
 
-    # TODO: add more cases for other input args
+    # TODO: add more cases for other input args (flags, etc.)
+
+    "-r" | "--restore") # restore a file to its original location
+        op=$cOP_RESTORE
+        ;;
 
     *) # argument is not a flag/option; likely a filename
         inputarg=${arg%/} # remove any '/' characters if it was a directory for metadata use
@@ -58,17 +74,30 @@ for arg in "$@"; do
             filepath="$PWD/$relapath$filename"      # relative path
         fi
 
-        if ! [ -e $filepath ]; then
-            err+="\n  no file '$filename' exists at '$filepath'"
-            op=$cOP_ERROR
+        if [ $op == $cOP_SCRAP ]; then
+            if ! [ -e $filepath ]; then
+                ErrMsg "no file '$filename' exists at '$filepath'"
+                op=$cOP_ERROR
+            fi
+        elif [ $op == $cOP_RESTORE ]; then
+            if ! [ -e "$cFILELOC$filename" ]; then # file name not in .../Trash/files
+                ErrMsg "'$filename' does not exist in the scrap"
+                op=$cOP_ERROR
+            fi
+            if ! [ -e "$cINFOLOC$filename$cINFOEXT" ]; then
+                ErrMsg "'filename' does not have a $cINFOEXT file associated with it in the trash"
+                op=$cOP_ERROR
+            fi
+        else
+            ErrMsg "Invalid argument '$arg' for selected operation"
         fi
-
+        ;;
     esac
 done
 
 if [ -z $filename ]; then # filename is an empty string
     # if we made it this far, we should have a file specified
-    err+="\n  missing file operand"
+    ErrMsg "missing file operand"
     op=$cOP_ERROR
 fi
 if [ $op == $cOP_ERROR ]; then
@@ -94,5 +123,9 @@ case $op in
         printf "[Trash Info]\nPath=$filepath\nDeletionDate=$(GetDate)\n" > $infofile
         mv $filepath $cFILELOC$filename # move the file to be scrapped into the trash
         printf "Successfully scrapped the file $filename\n" # report results to the user
+        ;;
+    
+    $cOP_RESTORE) # restore a file from the scrap to its original location
+        printf "Restored $(RestoreFile "$filename")\n"
         ;;
 esac
