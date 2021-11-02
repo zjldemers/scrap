@@ -3,13 +3,11 @@
 
 # Broader TODO list (in no particular order):
 # - Empty the entire trash bin
-# - List contents of Trash/files
-# - List contents of Trash/info
 # - List contents of Trash/files as a tree, with options
-# - Display the metadata associated with a given file
 # - Display a help menu
 # - Allow for option concatenation (e.g. -r [f1] -s[f2]...)
 # --- also consider something like -abc (if there's a combination that would be reasonable)
+# - Handle duplicates better (search for files via .trashinfo Path data rather than their stored filenames)
 
 
 
@@ -19,6 +17,7 @@ i=0 # used to increment op codes below
 cOP_SCRAP=$((i=i+1))   # scrap a file (place it in the trash with metadata)
 cOP_RESTORE=$((i=i+1)) # restore a specfied file to its original location
 cOP_SHRED=$((i=i+1))   # permanently and securely delete a scrapped file
+cOP_META=$((i=i+1))    # view metadata associated with a given file
 cOP_ERROR=$((i=i+1))   # display error messages
 
 # Paths
@@ -81,6 +80,20 @@ for arg in "$@"; do
         exit # no need to process anything further, quit the script
         ;;
 
+    "-f" | "--files") # list contents of Trash/files directory
+        ls --color=auto -A $cFILELOC
+        exit # no need to process anything further, quit the script
+        ;;
+    
+    "-i" | "--info") # list contents of Trash/info directory
+        ls --color=auto -A $cINFOLOC
+        exit # no need to process anything further, quit the script
+        ;;
+
+    "-m" | "--meta") # view metadata associated with a given file
+        op=$cOP_META
+        ;;
+
     "-r" | "--restore") # restore a specfied file to its original location
         op=$cOP_RESTORE
         ;;
@@ -104,7 +117,7 @@ for arg in "$@"; do
                 ErrMsg "no file '$filename' exists at '$filepath'"
                 op=$cOP_ERROR
             fi
-        elif [[ ($op == $cOP_RESTORE) || ($op == $cOP_SHRED) ]]; then
+        elif [[ ($op == $cOP_RESTORE) || ($op == $cOP_SHRED) || ($op == $cOP_META) ]]; then
             if ! [ -e "$cFILELOC$filename" ]; then # file name not in .../Trash/files
                 ErrMsg "'$filename' does not exist in the scrap"
                 op=$cOP_ERROR
@@ -132,6 +145,10 @@ if [ $op == $cOP_ERROR ]; then
 fi
 
 case $op in
+    $cOP_META) # view metadata associated with a given file
+        printf "$(cat "$cINFOLOC$filename$cINFOEXT")\n"
+        ;;
+
     $cOP_RESTORE) # restore a file from the scrap to its original location
         printf "Restored $(RestoreFile "$filename")\n"
         ;;
