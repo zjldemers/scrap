@@ -2,8 +2,6 @@
 # Licensed under the terms of the GPL v3. See LICENSE.
 
 # Broader TODO list (in no particular order):
-# - Allow for option concatenation (e.g. -r [f1] -s[f2]...)
-# --- also consider something like -abc (if there's a combination that would be reasonable)
 # - Handle duplicates better (search for files via .trashinfo Path data rather than their stored filenames)
 
 
@@ -75,12 +73,17 @@ function GetScrapInfo() {
     echo "$ret"
 }
 function RestoreFile() {
+    # $1: file name (as formatted in the Trash) to be restored
     origpath=$(awk -F 'Path=' '{print $2}' "$cINFOLOC$1$cINFOEXT") # Find the item's original path to restore it to
     origpath="${origpath//$'\n'}"                                  # Remove erroneous trailing newlines from previous step
     mkdir -p "${origpath%/*}/"                                     # Remake any parent directories, if needed (%/* removes the filename from the path)
     mv $cFILELOC$1 $origpath                                       # Move the file back to where it came from originally
     shred --remove=wipe "$cINFOLOC$filename$cINFOEXT"              # Remove the info file permanently
     echo $origpath                                                 # Return the restored file's new (original) path
+}
+function FindMatchingFiles() {
+    # $1: 
+    echo ""
 }
 
 
@@ -168,15 +171,14 @@ for arg in "$@"; do
             # $arg should be a file or directory name
             inputarg=${arg%/} # remove any '/' characters if it was a directory for metadata use
             filename="$(basename "$inputarg")"          # name of file
-            relapath="$(echo ${inputarg%"$filename"})"  # relative path, if specified
-            if [ "${relapath:0:1}" == "/" ]; then       # starts with a '/', assume absolute path given
-                filepath=$relapath$filename             # absolute path
-            else
-                filepath="$PWD/$relapath$filename"      # relative path
-            fi
 
             if [ $op == $cOP_SCRAP ]; then
-                if ! [ -e $filepath ]; then
+                relapath="$(echo ${inputarg%"$filename"})"  # relative path, if specified
+                filepath="$PWD/$relapath$filename"          # assume relative path / define filepath
+                if [ "${relapath:0:1}" == "/" ]; then       # starts with a '/', assume absolute path given
+                    filepath=$relapath$filename             # absolute path
+                fi
+                if ! [ -e $filepath ]; then # filepath doesn't point to an existing file/directory
                     ErrMsg "no file '$filename' exists at '$filepath'"
                     op=$cOP_ERROR
                 fi
@@ -212,7 +214,7 @@ fi
 case $op in
     $cOP_EMPTY) # permanently and securely delete all scrapped files
         if [[ "$(ls -A $cFILELOC)" || "$(ls -A $cINFOLOC)" ]]; then
-            # Trash/files OR Trash/info contain files
+            # either Trash/files OR Trash/info contains files that could be erased
             printf "Confirm: permanently erase all contents in trash?\n(THIS CANNOT BE UNDONE) (y/n) "
             read check
             while [[ ("$check" != "y") && ("$check" != "n") ]]; do
@@ -247,21 +249,30 @@ case $op in
         ;;
 
     $cOP_SCRAP) # scrap a file, placing it in the trash along with relevant metadata
+        # To follow standards, this performs somewhat of a messy process to deconflict files with the same
+        #    name that have been added to the Trash
         infofile="$cINFOLOC$filename$cINFOEXT" # file to store metadata in
-        filenum=0                              # helps with duplicate names in trash directory
-        while [[ -f $infofile ]]; do 
-            # file already exists, increment filenum and append it to the file name to try that
-            ((filenum=filenum+1))
-            infofile=$cINFOLOC$filename$filenum$cINFOEXT
-        done
-        if [ $filenum -gt 0 ]; then # a file number was needed to avoid overwriting
-            filename+=$filenum
+        num=1 # file number for duplicates
+        namext="$(basename $filename)" # name and extension (but no path)
+        name="$(echo $namext | rev | cut -s -f 2- -d '.' | rev)" # filename without extension, if it has one
+        ext="$(echo "$(basename $filename)" | cut -s -f 2- -d '.')" # extension only, blank if it doesn't have one
+        if ! [ -z $ext ]; then # file had an extension
+            ext=".$ext" # add the period to the front
         fi
-
-        # Write the necessary metadata into the new file
-        printf "[Trash Info]\nPath=$filepath\nDeletionDate=$(date '+%Y-%m-%dT%H:%M:%S')\n" > $infofile
-        mv $filepath $cFILELOC$filename # move the file to be scrapped into the trash
-        printf "Successfully scrapped the file $filename\n" # report results to the user
+        while [[ -f $infofile ]]; do 
+            # file already exists, increment num and append it to the file name to try that
+            printf "'$infofile' already exists\n"
+            ((num=num+1)) # starts with 2, following standards (e.g. a.b, a.2.b, a.3.b, ...)
+            infofile="$cINFOLOC$name.$num$ext$cINFOEXT"
+        done
+        trashname="$name" # name to place in Trash/files (with deconfliction)
+        if [ $num -gt 1 ]; then # a file number was needed to avoid overwriting
+            trashname+=".$num"  # add that number to the name for deconfliction
+        fi
+        trashname+=$ext # add extension ($ext is an empty string if there is no extension)
+        printf "[Trash Info]\nPath=$filepath\nDeletionDate=$(date '+%Y-%m-%dT%H:%M:%S')\n" > $infofile # Write the metadata file
+        mv $filepath $cFILELOC$trashname # move the file to be scrapped into the trash
+        printf "Successfully scrapped the file $filename\n" # report results to the user, using original filename
         ;;
     
     $cOP_SHRED) # permanently and securely delete a scrapped file
