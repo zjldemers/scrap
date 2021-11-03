@@ -2,7 +2,6 @@
 # Licensed under the terms of the GPL v3. See LICENSE.
 
 # Broader TODO list (in no particular order):
-# - Empty the entire trash bin
 # - Allow for option concatenation (e.g. -r [f1] -s[f2]...)
 # --- also consider something like -abc (if there's a combination that would be reasonable)
 # - Handle duplicates better (search for files via .trashinfo Path data rather than their stored filenames)
@@ -17,6 +16,7 @@ cOP_RESTORE=$((i=i+1)) # restore a specified file to its original location
 cOP_SHRED=$((i=i+1))   # permanently and securely delete a scrapped file
 cOP_META=$((i=i+1))    # view metadata associated with a given file
 cOP_TREE=$((i=i+1))    # view contents of Trash/files as a tree to specified depth
+cOP_EMPTY=$((i=i+1))   # permanently and securely delete all scrapped files
 cOP_ERROR=$((i=i+1))   # display error messages
 
 # Paths and other constant strings
@@ -33,6 +33,8 @@ Interact with your trash bin by discarding, restoring, or shredding various
   operate without any conflicts.
 \nMandatory arguments to long options are mandatory for short options too.
   -d, --directory  print the directory where trash files are stored
+  --empty          After confirmation, shred all scrapped files, permanently
+                       and securely removing them from the system.
   -f, --files      list contents of Trash/files directory (scrapped files)
   -i, --info       list contents of Trash/info directory (metadata associated
                        with scrapped files)
@@ -103,6 +105,11 @@ for arg in "$@"; do
     "-d" | "--directory") # print the path to the Trash/files location
         printf "$cFILELOC\n"
         exit # no need to process anything further, quit the script
+        ;;
+    
+    "--empty") # permanently and securely delete all scrapped files
+        op=$cOP_EMPTY
+        reqfile=0
         ;;
 
     "-f" | "--files") # list contents of Trash/files directory
@@ -203,6 +210,34 @@ if [ $op == $cOP_ERROR ]; then
 fi
 
 case $op in
+    $cOP_EMPTY) # permanently and securely delete all scrapped files
+        if [[ "$(ls -A $cFILELOC)" || "$(ls -A $cINFOLOC)" ]]; then
+            # Trash/files OR Trash/info contain files
+            printf "Confirm: permanently erase all contents in trash?\n(THIS CANNOT BE UNDONE) (y/n) "
+            read check
+            while [[ ("$check" != "y") && ("$check" != "n") ]]; do
+                printf "Please enter either 'y' or 'n': "
+                read check
+            done
+            if [ "$check" == "y" ]; then # user confirmed operation
+                printf "Shredding all trash files...\n"
+                # shred all files in the files directory and its sub-directories
+                find "$cFILELOC" -type f -exec shred -f --remove=wipe {} +
+                # delete all directories inside of the trash folder (all are empty now)
+                find "$cFILELOC" -mindepth 1 -delete
+                # delete all metadata files
+                printf "Shredding all trash metadata...\n"
+                find "$cINFOLOC" -type f -exec shred -f --remove=wipe {} +
+                printf "Shredding complete\n"
+            else
+                printf "Canceled empty operation\n"
+            fi
+        else
+            # Trash is already empty
+            printf "Trash is already empty\n"
+        fi
+        ;;
+
     $cOP_META) # view metadata associated with a given file
         printf "$(cat "$cINFOLOC$filename$cINFOEXT")\n"
         ;;
@@ -252,7 +287,6 @@ case $op in
         else
             # user discontinued operation
             printf "Cancled shredding of $filename\n"
-            exit # no need to process anything further, quit the script
         fi
         ;;
 
