@@ -34,17 +34,23 @@ Interact with your trash bin by discarding, restoring, or shredding various
   files in such a way that a GUI-based trash manager will also be able to
   operate without any conflicts.
 \nMandatory arguments to long options are mandatory for short options too.
-  -d, --directory  Print the directory where trash files are stored.
-  -f, --files      List contents of Trash/files directory (scrapped files).
-  -i, --info       List contents of Trash/info directory (metadata associated
-                       with scrapped files).
-  -m, --meta       View metadata associated with a given file.
-  -r, --restore    Restore a specified file to its original location.
-  -s, --shred      After confirmation, shred the specified scrapped file, 
-                       permanently and securely removing it from the system.
-  --help           Display this help and exit.
+  -d, --directory  print the directory where trash files are stored
+  -f, --files      list contents of Trash/files directory (scrapped files)
+  -i, --info       list contents of Trash/info directory (metadata associated
+                       with scrapped files)
+  -m, --meta       view metadata associated with a given file
+  -r, --restore    restore a specified file to its original location
+  -s, --shred      after confirmation, shred the specified scrapped file, 
+                       permanently and securely removing it from the system
+  --help           display this help and exit
+  --version        output version information and exit
 \nWritten by Zachary J. L. Demers
 View the source at https://github.com/zdemers/scrap.git\n"
+cVERSIONSTR="scrap beta\nLicense GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+View the open source repository at https://github.com/zdemers/scrap
+There is NO WARRANTY, to the extent permitted by law.\n
+Written by Zachary J. L. Demers\n"
 
 
 ### VARIABLES
@@ -55,10 +61,6 @@ err="scrap error:" # error message to be appended as it goes
 ### FUNCTIONS
 function ErrMsg() {
     err+="\n  $1"
-}
-function GetDate() {
-    # return the current date/time in the appropriate format for the .trashinfo file
-    echo "$(date '+%Y-%m-%dT%H:%M:%S')"
 }
 function GetScrapInfo() {
     # return information about the scrap pile such as number of files and storage used
@@ -127,6 +129,11 @@ for arg in "$@"; do
     "-s" | "--shred") # permanently and securely delete a scrapped file
         op=$cOP_SHRED
         ;;
+    
+    "--version") # output version information and exit
+        printf "$cVERSIONSTR"
+        exit
+        ;;
 
     *) # argument is not a flag/option; likely a filename
         inputarg=${arg%/} # remove any '/' characters if it was a directory for metadata use
@@ -192,7 +199,7 @@ case $op in
         fi
 
         # Write the necessary metadata into the new file
-        printf "[Trash Info]\nPath=$filepath\nDeletionDate=$(GetDate)\n" > $infofile
+        printf "[Trash Info]\nPath=$filepath\nDeletionDate=$(date '+%Y-%m-%dT%H:%M:%S')\n" > $infofile
         mv $filepath $cFILELOC$filename # move the file to be scrapped into the trash
         printf "Successfully scrapped the file $filename\n" # report results to the user
         ;;
