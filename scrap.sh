@@ -3,12 +3,10 @@
 
 # Broader TODO list (in no particular order):
 # - Empty the entire trash bin
-# - List contents of Trash/files as a tree, with options
 # - Display a help menu
 # - Allow for option concatenation (e.g. -r [f1] -s[f2]...)
 # --- also consider something like -abc (if there's a combination that would be reasonable)
 # - Handle duplicates better (search for files via .trashinfo Path data rather than their stored filenames)
-# - Add --version option
 
 
 
@@ -19,6 +17,7 @@ cOP_SCRAP=$((i=i+1))   # scrap a file (place it in the trash with metadata)
 cOP_RESTORE=$((i=i+1)) # restore a specified file to its original location
 cOP_SHRED=$((i=i+1))   # permanently and securely delete a scrapped file
 cOP_META=$((i=i+1))    # view metadata associated with a given file
+cOP_TREE=$((i=i+1))    # view contents of Trash/files as a tree to specified depth
 cOP_ERROR=$((i=i+1))   # display error messages
 
 # Paths and other constant strings
@@ -56,6 +55,8 @@ Written by Zachary J. L. Demers\n"
 ### VARIABLES
 op=$cOP_SCRAP      # operation selected to perform
 filename=""        # name of file to be operated on
+numopt=-1          # a number option input (e.g. tree depth)
+reqfile=1          # flag stating whether or not the operation requires a file
 err="scrap error:" # error message to be appended as it goes
 
 ### FUNCTIONS
@@ -130,50 +131,74 @@ for arg in "$@"; do
         op=$cOP_SHRED
         ;;
     
+    "-t" | "--tree") # view contents of Trash/files as a tree to specified depth
+        op=$cOP_TREE
+        reqfile=0
+        ;;
+    
     "--version") # output version information and exit
         printf "$cVERSIONSTR"
         exit
         ;;
 
     *) # argument is not a flag/option; likely a filename
-        inputarg=${arg%/} # remove any '/' characters if it was a directory for metadata use
-        filename="$(basename "$inputarg")"          # name of file
-        relapath="$(echo ${inputarg%"$filename"})"  # relative path, if specified
-        if [ "${relapath:0:1}" == "/" ]; then       # starts with a '/', assume absolute path given
-            filepath=$relapath$filename             # absolute path
+        if [ $op == $cOP_TREE ]; then
+            # $arg should be an integer > 0
+            if ! command -v "tree" &> /dev/null; then
+                # tree command is not installed/available
+                ErrMsg "This operation requires 'tree' to be installed"
+                op=$cOP_ERROR
+            elif [[ (-z "${arg//[0-9]}") && (-n "$arg") && ($arg -gt 0) ]]; then
+                # arg is a valid integer > 0
+                tree $cFILELOC -L $arg
+                exit
+            else
+                # bad argument input
+                ErrMsg "invalid argument '$arg': -t/--tree requires an integer greater than 0"
+                op=$cOP_ERROR
+            fi
         else
-            filepath="$PWD/$relapath$filename"      # relative path
-        fi
+            # $arg should be a file or directory name
+            inputarg=${arg%/} # remove any '/' characters if it was a directory for metadata use
+            filename="$(basename "$inputarg")"          # name of file
+            relapath="$(echo ${inputarg%"$filename"})"  # relative path, if specified
+            if [ "${relapath:0:1}" == "/" ]; then       # starts with a '/', assume absolute path given
+                filepath=$relapath$filename             # absolute path
+            else
+                filepath="$PWD/$relapath$filename"      # relative path
+            fi
 
-        if [ $op == $cOP_SCRAP ]; then
-            if ! [ -e $filepath ]; then
-                ErrMsg "no file '$filename' exists at '$filepath'"
-                op=$cOP_ERROR
-            fi
-        elif [[ ($op == $cOP_RESTORE) || ($op == $cOP_SHRED) || ($op == $cOP_META) ]]; then
-            if ! [ -e "$cFILELOC$filename" ]; then # file name not in .../Trash/files
-                ErrMsg "'$filename' does not exist in the scrap"
-                op=$cOP_ERROR
-            fi
-            if ! [ -e "$cINFOLOC$filename$cINFOEXT" ]; then
-                ErrMsg "'filename' does not have a $cINFOEXT file associated with it in the trash"
-                op=$cOP_ERROR
-            fi
-        else
-            ErrMsg "Invalid argument '$arg' for selected operation"
-        fi
+            if [ $op == $cOP_SCRAP ]; then
+                if ! [ -e $filepath ]; then
+                    ErrMsg "no file '$filename' exists at '$filepath'"
+                    op=$cOP_ERROR
+                fi
+            elif [[ ($op == $cOP_RESTORE) || ($op == $cOP_SHRED) || ($op == $cOP_META) ]]; then
+                if ! [ -e "$cFILELOC$filename" ]; then # file name not in .../Trash/files
+                    ErrMsg "'$filename' does not exist in the scrap"
+                    op=$cOP_ERROR
+                fi
+                if ! [ -e "$cINFOLOC$filename$cINFOEXT" ]; then
+                    ErrMsg "'$filename' does not have a $cINFOEXT file associated with it in the trash"
+                    op=$cOP_ERROR
+                fi
+            else
+                ErrMsg "invalid argument '$arg' for selected operation"
+            fi # end if[scrap], elif[restore,shred,meta]
+        fi # end if[tree], else
         ;;
     esac
 done
 
-if [[ ($# -lt 3) && (-z $filename) ]]; then # filename is an empty string
-    # if we made it this far with no more than 2 arguments, we should have a valid file specified
+if [[ ($reqfile == 1) && ($# -lt 3) && (-z $filename) ]]; then 
+    # filename is an empty string but the operation requires a file
     ErrMsg "missing file operand"
     op=$cOP_ERROR
 fi
 if [ $op == $cOP_ERROR ]; then
-    # TODO: create help context
-    printf "$err\n  Help context menu in development\n"
+    # Report errors, recommend help menu, and quit
+    ErrMsg "  Try 'scrap --help' for more information"
+    printf "$err\n"
     exit # no need to process anything further, quit the script
 fi
 
