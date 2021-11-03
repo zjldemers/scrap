@@ -3,7 +3,6 @@
 
 # Broader TODO list (in no particular order):
 # - Empty the entire trash bin
-# - Display a help menu
 # - Allow for option concatenation (e.g. -r [f1] -s[f2]...)
 # --- also consider something like -abc (if there's a combination that would be reasonable)
 # - Handle duplicates better (search for files via .trashinfo Path data rather than their stored filenames)
@@ -41,6 +40,8 @@ Interact with your trash bin by discarding, restoring, or shredding various
   -r, --restore    restore a specified file to its original location
   -s, --shred      after confirmation, shred the specified scrapped file, 
                        permanently and securely removing it from the system
+  -t, --tree       view contents of Trash/files directory as a tree, add a
+                       positive integer for max depth, if desired
   --help           display this help and exit
   --version        output version information and exit
 \nWritten by Zachary J. L. Demers
@@ -150,8 +151,7 @@ for arg in "$@"; do
                 op=$cOP_ERROR
             elif [[ (-z "${arg//[0-9]}") && (-n "$arg") && ($arg -gt 0) ]]; then
                 # arg is a valid integer > 0
-                tree $cFILELOC -L $arg
-                exit
+                numopt=$arg # set the number option input for when operation is performed below
             else
                 # bad argument input
                 ErrMsg "invalid argument '$arg': -t/--tree requires an integer greater than 0"
@@ -253,6 +253,14 @@ case $op in
             # user discontinued operation
             printf "Cancled shredding of $filename\n"
             exit # no need to process anything further, quit the script
+        fi
+        ;;
+
+    $cOP_TREE) # view contents of Trash/files as a tree to specified depth
+        if [ $numopt -gt 0 ]; then
+            tree $cFILELOC -L $numopt
+        else
+            tree $cFILELOC
         fi
         ;;
 esac
