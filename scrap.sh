@@ -1,21 +1,17 @@
 #!/bin/bash
 # Licensed under the terms of the GPL v3. See LICENSE.
 
-# Broader TODO list (in no particular order):
-# - Handle duplicates better (search for files via .trashinfo Path data rather than their stored filenames)
-
-
 
 ### CONSTANTS
 # Operations
-i=0 # used to increment op codes below
-cOP_SCRAP=$((i=i+1))   # scrap a file (place it in the trash with metadata)
-cOP_RESTORE=$((i=i+1)) # restore a specified file to its original location
-cOP_SHRED=$((i=i+1))   # permanently and securely delete a scrapped file
-cOP_META=$((i=i+1))    # view metadata associated with a given file
-cOP_TREE=$((i=i+1))    # view contents of Trash/files as a tree to specified depth
-cOP_EMPTY=$((i=i+1))   # permanently and securely delete all scrapped files
-cOP_ERROR=$((i=i+1))   # display error messages
+o=0 # used to increment op codes below
+cOP_SCRAP=$((o=o+1))   # scrap a file (place it in the trash with metadata)
+cOP_RESTORE=$((o=o+1)) # restore a specified file to its original location
+cOP_SHRED=$((o=o+1))   # permanently and securely delete a scrapped file
+cOP_META=$((o=o+1))    # view metadata associated with a given file
+cOP_TREE=$((o=o+1))    # view contents of Trash/files as a tree to specified depth
+cOP_EMPTY=$((o=o+1))   # permanently and securely delete all scrapped files
+cOP_ERROR=$((o=o+1))   # display error messages
 
 # Paths and other constant strings
 cTRASHLOC="$HOME/.local/share/Trash" # overall trash location
@@ -82,8 +78,17 @@ function RestoreFile() {
     echo $origpath                                                 # Return the restored file's new (original) path
 }
 function FindMatchingFiles() {
-    # $1: 
-    echo ""
+    # $1: file name (as originally named, not as named after trash deconfliction)
+    declare -a files=() # create an array to return
+    for f in $cINFOLOC*; do
+        line2="$(sed '2q;d' $f)" # line 2 of the .trashinfo file (Path=...)
+        namext="$(basename $line2)" # name.extension of original file
+        if [ $1 == $namext ]; then
+            # found a file with the right name and extension
+            files+=("$f")
+        fi
+    done
+    echo ${files[@]} # return the list of files that matched
 }
 
 
@@ -183,13 +188,42 @@ for arg in "$@"; do
                     op=$cOP_ERROR
                 fi
             elif [[ ($op == $cOP_RESTORE) || ($op == $cOP_SHRED) || ($op == $cOP_META) ]]; then
-                if ! [ -e "$cFILELOC$filename" ]; then # file name not in .../Trash/files
+                # Find all scrapped files that match the given file name and let the user choose which to operate on
+                declare -A arr
+                count=0
+                for f in $cINFOLOC*; do
+                    # search all files in Trash/info/*
+                    scrapfile="$(basename $f .trashinfo)" # name of file in the scrap (deconfliction considered)
+                    line2="$(sed '2q;d' $f)" # line 2 of the .trashinfo file (Path=...)
+                    line3="$(sed '3q;d' $f)" # line 3 of the .trashinfo file (DeletionDate=...)
+                    namext="$(basename $line2)" # name.extension of original file
+                    if [ $filename == $namext ]; then # found a file with the right name and extension
+                        arr[$count,0]=$line2     # [0]="Path=..."
+                        arr[$count,1]=$line3     # [1]="DeletionDate="
+                        arr[$count,2]=$scrapfile # [2]="name.deconfliction#.ext"
+                        count=$((count+1)) # increment the counter
+                    fi
+                done
+
+                # Check how many files matched the given filename
+                if [ $count == 0 ]; then
                     ErrMsg "'$filename' does not exist in the scrap"
                     op=$cOP_ERROR
-                fi
-                if ! [ -e "$cINFOLOC$filename$cINFOEXT" ]; then
-                    ErrMsg "'$filename' does not have a $cINFOEXT file associated with it in the trash"
-                    op=$cOP_ERROR
+                elif [ $count -gt 1 ]; then
+                    printf "\nMultiple files in the trash match that name\n"
+                    for (( i=0; i<$count; i++ )); do
+                        printf "$i:\t${arr[$i,0]}\n\t${arr[$i,1]}\n"
+                    done
+                    printf "Select which file you would like to operate on: "
+                    read check
+                    while [[ ($check -lt 0) || ($check -ge $count) ]]; do
+                        printf "Please enter a selection between 0 and $((count-1)): "
+                        read check
+                    done
+                    filename=${arr[$check,2]} # deconflictable name as stored in trash
+                else
+                    # Only one file with that name
+                    filename=$scrapfile # only one scrapfile was found, so use it to find it in the scrap
                 fi
             else
                 ErrMsg "invalid argument '$arg' for selected operation"
@@ -261,7 +295,6 @@ case $op in
         fi
         while [[ -f $infofile ]]; do 
             # file already exists, increment num and append it to the file name to try that
-            printf "'$infofile' already exists\n"
             ((num=num+1)) # starts with 2, following standards (e.g. a.b, a.2.b, a.3.b, ...)
             infofile="$cINFOLOC$name.$num$ext$cINFOEXT"
         done
