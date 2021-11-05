@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# scrap
-The Simple Computer Rubbish Accounting Program (SCRAP)
-=======
 # scrap: A(nother) Linux Trash CLI
 This small repository supplies a simple, intuitive (I hope) command line interface (CLI) to a user's Trash bin, based off of the [FreeDesktop.org Trash Specification](https://specifications.freedesktop.org/trash-spec/trashspec-latest.html).  With that in mind, this is intended for use on Linux machines only, at least for now.
 
@@ -135,5 +131,4 @@ This will output the current version information along with a brief license desc
 
 
 # Bugs and Feedback
-If you find bugs or have ideas on how to improve this simple CLI, please feel free to submit an issue to the [GitHub repo's issue page](https://github.com/zdemers/scrap/issues).
->>>>>>> 61053538e8c23d0e727e295ba6d7fccb76e33600
+If you find bugs or have ideas on how to improve this simple CLI, please feel free to submit an issue to the [GitHub repo's issue page](https://github.com/zdemers/scrap/issues)
