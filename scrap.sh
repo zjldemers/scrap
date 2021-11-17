@@ -293,15 +293,12 @@ function main() {
             infofile="$INFO_LOC$filename$INFO_EXT" # file to store metadata in
             num=1 # file number for duplicates
             namext="$(basename $filename)" # name and extension (but no path)
-            name="$(echo $namext | rev | cut -s -f 2- -d '.' | rev)" # filename without extension
-            if [ -z $name ]; then # if name is empy (occurs if no extension)
+            name=${namext%%.*} # get the filename without an extension (if there is one)
+            ext="" # default to no extension until found
+            if [ -z $name ]; then # if name is empy (occurs for files likek ".abc")
                 name=$namext # reset the name
-                ext=""       # set the extension to be empty
-            else # there is an extension, so set that appropriately
-                ext="$(echo "$(basename $filename)" | cut -s -f 2- -d '.')" # extension only, blank if it doesn't have one
-            fi
-            if ! [ -z $ext ]; then # file had an extension
-                ext=".$ext" # add the period to the front
+            elif [[ "$namext" == *"."* ]]; then # there is an extension, so set that appropriately
+                ext=".${namext#*.}" # handles multi-extension files such as "*.tar.xz"
             fi
             while [[ -f $infofile ]]; do 
                 # file already exists, increment num and append it to the file name to try that
