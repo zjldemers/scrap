@@ -228,7 +228,7 @@ function main() {
                         fi
                     else
                         # Only one file with that name
-                        filename=$scrapfile # only one scrapfile was found, so use it to find it in the scrap
+                        filename=${arr[0,2]} # only one scrapfile was found, so use the zeroth element
                     fi
                 else
                     ErrMsg "invalid argument '$arg' for selected operation"
@@ -338,7 +338,7 @@ function main() {
                 printf "$filename has successfully been shredded\n"
             else
                 # user discontinued operation
-                printf "Cancled shredding of $filename\n"
+                printf "Canceled shredding of $filename\n"
             fi
             ;;
 
