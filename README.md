@@ -131,4 +131,6 @@ This will output the current version information along with a brief license desc
 
 
 # Bugs and Feedback
-If you find bugs or have ideas on how to improve this simple CLI, please feel free to submit an issue to the [GitHub repo's issue page](https://github.com/zdemers/scrap/issues)
+There is one known bug where this script does not appropriately handle file names or file paths that contain spaces in them.  I intend on fixing this bug (it's a little more than "just add quotes"), but it's priority is low compared to other things in my life so it may be a while before it gets handled.  I apologize for this shortcoming in the design and appreciate your patience in the meantime.
+
+If you find any other bugs or have ideas on how to improve this CLI, please feel free to submit an issue to the [GitHub repo's issue page](https://github.com/zdemers/scrap/issues).
